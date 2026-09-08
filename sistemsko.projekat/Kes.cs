@@ -5,14 +5,18 @@ namespace ProjekatSP
 {
     public class Kes
     {
+        private static readonly TimeSpan Ttl = TimeSpan.FromHours(1);
         private static readonly object lockObject = new object();
-        private static readonly Dictionary<string, IQAir> cache = new Dictionary<string, IQAir>();
+        private static readonly Dictionary<string, (IQAir value, DateTime cachedAt)> cache =
+            new Dictionary<string, (IQAir, DateTime)>();
 
         public static bool Contains(string key)
         {
             lock (lockObject)
             {
-                return cache.ContainsKey(key);
+                if (cache.TryGetValue(key, out var entry))
+                    return DateTime.UtcNow - entry.cachedAt < Ttl;
+                return false;
             }
         }
 
@@ -20,10 +24,9 @@ namespace ProjekatSP
         {
             lock (lockObject)
             {
-                if (cache.TryGetValue(key, out IQAir value) && value != null)
-                    return value;
-                else
-                    throw new KeyNotFoundException($"Key '{key}' not found in cache.");
+                if (cache.TryGetValue(key, out var entry) && DateTime.UtcNow - entry.cachedAt < Ttl)
+                    return entry.value;
+                throw new KeyNotFoundException($"Key '{key}' not found in cache or expired.");
             }
         }
 
@@ -31,7 +34,7 @@ namespace ProjekatSP
         {
             lock (lockObject)
             {
-                cache[key] = value;
+                cache[key] = (value, DateTime.UtcNow);
             }
         }
     }
